@@ -3,7 +3,8 @@
 Voice-guided UR7e pick-and-place demo using ArUco markers, OpenCV, RTDE,
 Robotiq Hand-E, Whisper, and an optional Ollama/LangChain selector.
 
-The video demonstration: demo_ur7e-aruco-llm.mp4
+The video demonstration: _demo_ur7e-aruco-llm.mp4_
+The presentation _presentation_ur7e-aruco-llm.pdf_
 
 ## Setup
 
