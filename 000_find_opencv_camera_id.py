@@ -1,3 +1,5 @@
+"""Scan OpenCV camera IDs and preview candidates for an Orbec/Orbbec camera."""
+
 import os
 
 os.environ.setdefault("OPENCV_VIDEOIO_PRIORITY_OBSENSOR", "0")
@@ -31,6 +33,7 @@ def fourcc_to_text(value):
 
 
 def print_windows_camera_devices():
+    """Print Windows camera-like USB devices to help match hardware names."""
     if os.name != "nt":
         return
 
@@ -73,6 +76,7 @@ def print_windows_camera_devices():
 
 
 def open_capture(camera_id, backend_id, width, height):
+    """Open a camera with low-latency settings used by the project scripts."""
     cap = cv2.VideoCapture(camera_id, backend_id)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
@@ -82,6 +86,7 @@ def open_capture(camera_id, backend_id, width, height):
 
 
 def read_first_frame(cap, attempts=15):
+    """Wait briefly for the camera pipeline to return a valid frame."""
     for _ in range(attempts):
         ok, frame = cap.read()
         if ok and frame is not None and frame.size > 0:
@@ -125,6 +130,7 @@ def scan_cameras(max_id, backend_key, width, height):
 
     found = []
     for camera_id in range(max_id + 1):
+        # Probe numeric OpenCV IDs because Windows does not expose stable IDs.
         info = probe_camera(camera_id, backend_key, width, height)
         if info is None:
             print(f"ID {camera_id}: not available")
@@ -167,6 +173,7 @@ def preview_candidates(candidates, width, height):
 
     selected = None
     for info in candidates:
+        # Let the operator visually confirm which working ID is the robot camera.
         camera_id = info["camera_id"]
         backend_id = info["backend_id"]
         backend_name = info["backend_name"]
@@ -217,7 +224,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Find the OpenCV camera ID for a USB Orbec/Orbbec camera."
     )
-    parser.add_argument("--max-id", type=int, default=4q)
+    parser.add_argument("--max-id", type=int, default=4)
     parser.add_argument(
         "--backend",
         choices=sorted(BACKENDS.keys()),
@@ -238,8 +245,8 @@ def main():
 
     if not candidates:
         print("\nNo cameras opened. Try:")
-        print("  python 007_find_orbec_camera_id.py --backend dshow")
-        print("  python 007_find_orbec_camera_id.py --max-id 20")
+        print("  python 000_find_opencv_camera_id.py --backend dshow")
+        print("  python 000_find_opencv_camera_id.py --max-id 20")
         return
 
     if args.no_preview:

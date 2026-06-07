@@ -1,3 +1,8 @@
+"""Robotiq URScript preamble embedded as a Python string.
+
+This file is intentionally mostly generated vendor script text.
+"""
+
 NEW_LINE = "\n"
 QUOTATION = "\""
 ROBOTIQ_PREAMBLE = "\n".join([

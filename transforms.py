@@ -1,3 +1,5 @@
+"""Coordinate transform helpers for camera, marker, flange, TCP, and robot base."""
+
 import cv2
 import numpy as np
 
@@ -13,12 +15,14 @@ class Transformations:
     """
 
     def __init__(self, path="handeye_result.npz"):
+        """Load the hand-eye calibration transform from disk."""
         data = np.load(path)
         self.T_cam2flange = np.asarray(data["T_cam2flange"], dtype=float)
         self.T_flange2cam = np.asarray(data["T_flange2cam"], dtype=float)
 
     @staticmethod
     def make_transform(R, t):
+        """Build a 4x4 homogeneous transform from rotation and translation."""
         T = np.eye(4)
         T[:3, :3] = np.asarray(R, dtype=float)
         T[:3, 3] = np.asarray(t, dtype=float).reshape(3)
@@ -26,11 +30,13 @@ class Transformations:
 
     @staticmethod
     def pose_to_transform(pose):
+        """Convert a UR pose [x, y, z, rx, ry, rz] to a 4x4 transform."""
         R, _ = cv2.Rodrigues(np.asarray(pose[3:6], dtype=float))
         return Transformations.make_transform(R, pose[:3])
 
     @staticmethod
     def transform_to_pose(T):
+        """Convert a 4x4 transform to a UR pose vector."""
         rvec, _ = cv2.Rodrigues(np.asarray(T[:3, :3], dtype=float))
         return [
             float(T[0, 3]),
@@ -43,11 +49,13 @@ class Transformations:
 
     @staticmethod
     def transform_point(T, point):
+        """Apply a 4x4 transform to a 3D point."""
         P = np.append(np.asarray(point, dtype=float).reshape(3), 1.0)
         return (T @ P)[:3]
 
     @staticmethod
     def pose_from_position_rotation(position, R_tcp2base):
+        """Create a UR pose from position and TCP-to-base rotation."""
         rvec, _ = cv2.Rodrigues(np.asarray(R_tcp2base, dtype=float))
         return [
             float(position[0]),
@@ -59,9 +67,11 @@ class Transformations:
         ]
 
     def marker2base(self, T_flange2base, T_marker2cam):
+        """Compose marker -> camera -> flange -> base."""
         return T_flange2base @ self.T_cam2flange @ T_marker2cam
 
     def point_marker2base(self, T_flange2base, T_marker2cam, P_marker):
+        """Transform one marker-frame point into robot base coordinates."""
         T_marker2base = self.marker2base(T_flange2base, T_marker2cam)
         return self.transform_point(T_marker2base, P_marker), T_marker2base
 
@@ -78,6 +88,7 @@ class Transformations:
 
     @staticmethod
     def rotation_z(angle_rad):
+        """Return a rotation matrix around the Z axis."""
         c = np.cos(angle_rad)
         s = np.sin(angle_rad)
         return np.array(

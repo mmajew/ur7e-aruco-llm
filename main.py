@@ -1,3 +1,5 @@
+"""Run the full voice-guided ArUco pick-and-place application."""
+
 from camera_aruco import ArucoCamera
 from audio_server import AudioServer
 from planner import Planner
@@ -18,12 +20,14 @@ GRIPPER_SPEED = 80  # percent, same scale as 009_gripper_check.py
 
 
 def main():
+    """Initialize all runtime services and keep the planner running."""
     audio_server = None
     cam = None
     robot = None
     voice_selector = None
 
     try:
+        # Start the optional browser dashboard before long-running services.
         audio_server = AudioServer()
         if not audio_server.start():
             audio_server = None
@@ -41,6 +45,7 @@ def main():
         tf = Transformations("handeye_result.npz")
         if audio_server is not None:
             audio_server.broadcast_status("connecting_robot", "Connecting to robot")
+        # Robot construction also configures TCP and gripper settings.
         robot = URRobot(
             ROBOT_IP,
             tcp=GRIPPER_TCP,
@@ -54,6 +59,7 @@ def main():
         planner = Planner(cam, tf, robot, voice_selector=voice_selector)
         planner.run_forever()
     finally:
+        # Release hardware and background threads in reverse startup order.
         if cam is not None:
             cam.release()
         if robot is not None:

@@ -1,3 +1,5 @@
+"""Serve the local web visualization, audio levels, commands, and camera stream."""
+
 import asyncio
 import json
 import queue
@@ -54,6 +56,7 @@ class AudioServer:
         self,
         frame_provider: Callable[[], bytes | None],
     ) -> None:
+        """Attach a callable that returns the latest JPEG camera frame."""
         self._frame_provider = frame_provider
 
     def start(self) -> bool:
@@ -120,6 +123,7 @@ class AudioServer:
                 return
 
     def _send_json(self, payload: dict[str, Any]) -> None:
+        """Schedule a thread-safe WebSocket broadcast."""
         if not self._running or self._loop is None:
             return
 
@@ -148,6 +152,7 @@ class AudioServer:
             self._http_thread = None
 
     def _start_http_server(self) -> None:
+        """Start the HTTP server that hosts the dashboard and MJPEG stream."""
         handler = self._make_http_handler()
         self._http_server = ThreadingHTTPServer((self.host, self.http_port), handler)
         self._http_server.daemon_threads = True
@@ -158,6 +163,7 @@ class AudioServer:
         self._http_thread.start()
 
     def _run_loop(self) -> None:
+        """Run the WebSocket event loop in its own thread."""
         try:
             import websockets
 
@@ -202,6 +208,7 @@ class AudioServer:
             )
 
     async def _handle_client_message(self, websocket: Any, message: Any) -> None:
+        """Validate browser commands before putting them into the queue."""
         try:
             payload = json.loads(message)
         except (TypeError, json.JSONDecodeError):
@@ -234,6 +241,7 @@ class AudioServer:
             self._clients.discard(websocket)
 
     def _placeholder_frame(self, message: str) -> bytes:
+        """Return a cached JPEG placeholder when no real camera frame exists."""
         cached = self._placeholder_frames.get(message)
         if cached is not None:
             return cached
@@ -315,6 +323,7 @@ class AudioServer:
                 self.wfile.write(content)
 
             def _serve_camera_stream(self) -> None:
+                """Serve camera frames as an MJPEG stream for the web dashboard."""
                 self.send_response(200)
                 self.send_header(
                     "Content-Type",

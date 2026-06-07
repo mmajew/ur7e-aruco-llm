@@ -1,3 +1,5 @@
+"""Record voice commands and map Polish/English requests to container IDs."""
+
 import os
 import re
 import unicodedata
@@ -641,6 +643,7 @@ def expand_search_text(text: str) -> str:
 
 
 def document_text(document: ContainerDocument) -> str:
+    """Join all searchable text fields for one container document."""
     return " ".join(
         (
             document.name,
@@ -717,10 +720,12 @@ def parse_container_id(raw: str) -> int | None:
 
 
 def is_known_container_id(container_id: int) -> bool:
+    """Return True if the ID exists in the configured container list."""
     return any(document.id == container_id for document in CONTAINER_DOCUMENTS)
 
 
 def format_rag_context(documents: list[ContainerDocument]) -> str:
+    """Format retrieved documents for the LLM selection prompt."""
     blocks = []
     for document in documents:
         blocks.append(
@@ -737,12 +742,14 @@ def format_rag_context(documents: list[ContainerDocument]) -> str:
 
 
 def normalize_ollama_base_url(url: str) -> str:
+    """Normalize Ollama host settings to a base HTTP URL."""
     if not url.startswith(("http://", "https://")):
         url = f"http://{url}"
     return url.rstrip("/")
 
 
 def is_ollama_available(base_url: str = OLLAMA_BASE_URL, timeout: float = 1.5) -> bool:
+    """Check whether the local Ollama API is reachable."""
     url = f"{normalize_ollama_base_url(base_url)}/api/tags"
     try:
         with urllib.request.urlopen(url, timeout=timeout):
@@ -1041,6 +1048,7 @@ class VoiceContainerSelector:
         self._publish_status("idle", "Ready for a voice command")
 
     def _publish_status(self, phase: str, message: str, **payload: Any) -> None:
+        """Forward workflow state to the optional browser visualizer."""
         if self.audio_visualizer is None:
             return
 
@@ -1097,6 +1105,7 @@ class VoiceContainerSelector:
             return result.container_id
 
     def _can_use_web_trigger(self) -> bool:
+        """Return True when the dashboard can trigger recording/selection."""
         return (
             self.audio_visualizer is not None
             and hasattr(self.audio_visualizer, "wait_for_command")
@@ -1107,6 +1116,7 @@ class VoiceContainerSelector:
         self,
         detected_ids: list[int] | None = None,
     ) -> int | None:
+        """Wait for dashboard commands instead of terminal input."""
         self.audio_visualizer.clear_commands()
         self._publish_status(
             "idle",
@@ -1248,6 +1258,7 @@ class VoiceContainerSelector:
         )
 
     def cleanup(self) -> None:
+        """Remove the temporary debug WAV file when enabled."""
         if self.save_debug_wave and os.path.exists(WAVE_OUTPUT):
             os.remove(WAVE_OUTPUT)
 

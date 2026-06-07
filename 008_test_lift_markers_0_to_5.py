@@ -1,3 +1,5 @@
+"""Lift each ArUco-marked box once and place it back at the detected pose."""
+
 import time
 
 from camera_aruco import ArucoCamera
@@ -21,7 +23,10 @@ GRIPPER_SPEED = 100
 
 
 class LiftOnlyPlanner(Planner):
+    """Planner variant that only performs a lift-and-return validation routine."""
+
     def run_marker_sequence(self, marker_ids):
+        """Visit each configured marker ID and return home between attempts."""
         self.cam.start_preview()
         self.move_home()
 
@@ -37,8 +42,10 @@ class LiftOnlyPlanner(Planner):
             self.move_home()
 
     def lift_marker_and_put_back(self, marker_id):
+        """Detect one marker, approach it, grip it, lift it, and return it."""
         print(f"Preparing marker {marker_id}")
 
+        # First detection is used to center the camera above the marker.
         pick_base, T_marker2base = self.calculate_pick_point_base(marker_id)
 
         camera_center_pose, camera_base = (
@@ -54,6 +61,7 @@ class LiftOnlyPlanner(Planner):
 
         print("\nRecalculating marker pose near target")
 
+        # Second detection improves the final pick pose after the camera move.
         pick_base, T_marker2base = self.calculate_pick_point_base(marker_id)
 
         R_grasp_tcp2base = Transformations.tcp_opposite_marker_rotation(
@@ -93,6 +101,7 @@ class LiftOnlyPlanner(Planner):
 
         self.close_gripper("at grip point")
 
+        # Reuse the exact reached pick pose for returning the object.
         lift_pose = list(saved_pick_pose)
         lift_pose[2] += self.approach_height
 
@@ -116,6 +125,7 @@ def main():
     robot = None
 
     try:
+        # Initialize camera, hand-eye transform, robot, and gripper control.
         cam = ArucoCamera(cam_id=CAM_ID, marker_length=MARKER_LENGTH)
         tf = Transformations("handeye_result.npz")
         robot = URRobot(

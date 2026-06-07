@@ -1,3 +1,5 @@
+"""Send compact Robotiq Hand-E gripper commands through UR RTDE custom scripts."""
+
 import rtde_control
 from robotiq_preamble import ROBOTIQ_PREAMBLE
 import time
@@ -21,6 +23,7 @@ class RobotiqGripper(object):
         self.rtde_c = rtde_c
 
     def call(self, script_name, script_function):
+        """Wrap a short Robotiq command with the full URScript preamble."""
         return self.rtde_c.sendCustomScriptFunction(
             "ROBOTIQ_" + script_name,
             ROBOTIQ_PREAMBLE + script_function

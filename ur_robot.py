@@ -1,3 +1,5 @@
+"""UR RTDE robot wrapper with TCP, motion, and Robotiq gripper helpers."""
+
 import numpy as np
 from robotiq_gripper_control import RobotiqGripper
 from rtde_control import RTDEControlInterface
@@ -7,6 +9,8 @@ from transforms import Transformations
 
 
 class URRobot:
+    """Small safety wrapper around RTDE motion commands and gripper scripts."""
+
     def __init__(
         self,
         ip,
@@ -24,6 +28,7 @@ class URRobot:
         self.gripper_force = self._clamp_percent(gripper_force)
         self.gripper_speed = self._clamp_percent(gripper_speed)
 
+        # Use separate RTDE interfaces for commands and live robot state.
         self.rtde_c = RTDEControlInterface(ip)
         self.rtde_r = RTDEReceiveInterface(ip)
 
@@ -35,11 +40,13 @@ class URRobot:
         self.configure_gripper()
 
     def set_tcp(self, tcp):
+        """Set the active TCP used by UR linear motion commands."""
         self.tcp = [float(value) for value in tcp]
         self.rtde_c.setTcp(self.tcp)
         print(f"TCP set to gripper: {self.tcp}")
 
     def stop(self):
+        """Stop the current UR script if one is running."""
         try:
             self.rtde_c.stopScript()
         except Exception as exc:
@@ -57,11 +64,13 @@ class URRobot:
         return Transformations.pose_to_transform(self.tcp)
 
     def get_flange2base(self):
+        """Recover flange -> base from the active TCP pose and configured TCP."""
         T_tcp2base = self.get_tcp2base()
         T_tcp2flange = self.get_tcp2flange()
         return T_tcp2base @ np.linalg.inv(T_tcp2flange)
 
     def move_l(self, pose, velocity=None, acceleration=None):
+        """Run a validated linear TCP move."""
         pose = self._validate_pose(pose)
         velocity = self.velocity if velocity is None else velocity
         acceleration = self.acceleration if acceleration is None else acceleration
@@ -70,8 +79,9 @@ class URRobot:
         ok = self.rtde_c.moveL(pose, velocity, acceleration)
         if ok is False:
             raise RuntimeError("Robot moveL failed or timed out")
-        
+
     def move_j(self, joints, velocity=None, acceleration=None):
+        """Run a validated joint-space move."""
         if len(joints) != 6:
             raise ValueError("Joint vector must have 6 values")
 
@@ -97,6 +107,7 @@ class URRobot:
             )
 
     def move_to_position_rotation(self, position, R_tcp2base, velocity=None, acceleration=None):
+        """Move linearly to a position with an explicit TCP orientation."""
         pose = Transformations.pose_from_position_rotation(position, R_tcp2base)
         self.move_l(pose, velocity=velocity, acceleration=acceleration)
         return pose
@@ -129,6 +140,7 @@ class URRobot:
 
     @staticmethod
     def _run_gripper_command(label, command):
+        """Run one gripper command and fail fast on timeout/error."""
         print(label)
         ok = command()
         if not ok:

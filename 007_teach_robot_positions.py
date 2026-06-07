@@ -1,5 +1,6 @@
+"""Teach named UR joint positions and save them to robot_positions.json."""
+
 import json
-import time
 import rtde_receive
 
 ROBOT_IP = "10.20.3.136"
@@ -7,12 +8,14 @@ OUTPUT_FILE = "robot_positions.json"
 
 
 def rad_to_deg_list(q):
+    """Convert joint angles from radians to rounded degrees for readability."""
     return [round(v * 180.0 / 3.1415926535, 1) for v in q]
 
 
 def main():
     rtde_r = rtde_receive.RTDEReceiveInterface(ROBOT_IP)
 
+    # Store both machine-friendly radians and human-readable degrees.
     positions = {}
 
     print("\n=== UR7e POSITION TEACHER ===")
@@ -28,6 +31,7 @@ def main():
 
         input(f"Move robot to '{name}' and press ENTER to capture...")
 
+        # Read the current joint configuration from the robot controller.
         joints = rtde_r.getActualQ()
 
         positions[name] = {

@@ -1,3 +1,5 @@
+"""Plan voice-selected ArUco pick, transfer, audio response, and return tasks."""
+
 import json
 import random
 import time
@@ -20,8 +22,11 @@ WAV_SAMPLE_WIDTH_DTYPES = {
 
 
 class Planner:
+    """High-level coordinator for camera detection, robot motion, and gripper use."""
+
     @staticmethod
     def load_positions(json_path="robot_positions.json"):
+        """Load named safe joint positions from JSON."""
         with open(json_path, "r") as f:
             return json.load(f)
 
@@ -31,17 +36,13 @@ class Planner:
         self.robot = robot
         self.voice_selector = voice_selector
 
-        # ==========================================
-        # LOAD SAFE JOINT POSITIONS
-        # ==========================================
+        # Safe joint poses keep long moves predictable.
         positions = self.load_positions()
 
         self.home_joints = positions["home"]["joints_rad"]
         self.transfer_joints = positions["transfer"]["joints_rad"]
 
-        # ==========================================
-        # TASK CONFIGURATION
-        # ==========================================
+        # Grip points are expressed in each marker's local coordinate frame.
         self.grip_points_marker = {
             0: np.array([0.035, 0.03, 0.005]),
             1: np.array([0.035, 0.03, 0.005]),
@@ -59,10 +60,8 @@ class Planner:
             Transformations.tcp_down_base_rotation()
         )
 
-    # =========================================================
-    # MAIN LOOP
-    # =========================================================
     def run_forever(self):
+        """Repeatedly ask for a marker ID and run the pick-place cycle."""
         self.cam.start_preview()
 
         self.move_home()
@@ -82,10 +81,8 @@ class Planner:
 
             self.move_home()
 
-    # =========================================================
-    # USER INPUT
-    # =========================================================
     def ask_marker_id(self):
+        """Get the target marker from voice selection or terminal input."""
         detected = self.cam.get_detected_ids()
 
         if self.voice_selector is not None:
@@ -116,6 +113,7 @@ class Planner:
         return self.ask_marker_id()
 
     def get_grip_point_marker(self, marker_id):
+        """Return the configured grip point for one marker ID."""
         try:
             return self.grip_points_marker[marker_id]
         except KeyError as exc:
@@ -123,32 +121,28 @@ class Planner:
                 f"No grip point configured for marker {marker_id}"
             ) from exc
 
-    # =========================================================
-    # SAFE JOINT MOVES
-    # =========================================================
     def move_home(self):
+        """Move to the taught HOME joint configuration."""
         print("Moving to HOME joints")
         self.robot.move_j(self.home_joints)
 
     def move_transfer(self):
+        """Move to the taught TRANSFER joint configuration."""
         print("Moving to TRANSFER joints")
         self.robot.move_j(self.transfer_joints)
 
-    # =========================================================
-    # GRIPPER
-    # =========================================================
     def open_gripper(self, reason):
+        """Open the gripper and print the current task reason."""
         print(f"Opening gripper: {reason}")
         self.robot.open_gripper()
 
     def close_gripper(self, reason):
+        """Close the gripper and print the current task reason."""
         print(f"Closing gripper: {reason}")
         self.robot.close_gripper()
 
-    # =========================================================
-    # AUDIO RESPONSES
-    # =========================================================
     def play_transition_audio_response(self, marker_id):
+        """Play one random WAV response for the selected marker."""
         path = self.random_audio_response_path(marker_id)
         if path is None:
             print(
@@ -165,6 +159,7 @@ class Planner:
 
     @staticmethod
     def random_audio_response_path(marker_id):
+        """Return one existing response WAV for a marker, or None."""
         candidates = [
             AUDIO_RESPONSES_DIR / f"cat_{marker_id}_{variant}.wav"
             for variant in AUDIO_RESPONSE_VARIANTS
@@ -176,6 +171,7 @@ class Planner:
 
     @staticmethod
     def play_wav(path):
+        """Play a WAV file through the default audio output device."""
         import sounddevice as sd
 
         with wave.open(str(path), "rb") as wav_file:
@@ -197,22 +193,16 @@ class Planner:
         ) as stream:
             stream.write(data)
 
-    # =========================================================
-    # PICK & PLACE
-    # =========================================================
     def run_pick_place(self, marker_id):
+        """Pick the selected marker object, visit transfer, and put it back."""
         print(f"\nPreparing marker {marker_id}")
 
-        # =====================================================
-        # CALCULATE PICK POSITION
-        # =====================================================
+        # First estimate: enough to move the camera above the marker.
         pick_base, T_marker2base = (
             self.calculate_pick_point_base(marker_id)
         )
 
-        # =====================================================
-        # CENTER CAMERA FOR PRECISE RECALCULATION
-        # =====================================================
+        # Center the camera for a cleaner second marker pose estimate.
         camera_center_pose, camera_base = (
             self.camera_center_pose_above_marker(
                 T_marker2base
@@ -226,9 +216,7 @@ class Planner:
 
         self.robot.move_l(camera_center_pose)
 
-        # =====================================================
-        # RECALCULATE PRECISE PICK
-        # =====================================================
+        # Second estimate: used for the actual pick pose.
         print("\nRecalculating marker pose near target")
 
         pick_base, T_marker2base = (
@@ -242,9 +230,7 @@ class Planner:
             )
         )
 
-        # =====================================================
-        # APPROACH POSITION
-        # =====================================================
+        # Approach vertically above the configured grip point.
         approach_base = pick_base.copy()
         approach_base[2] += self.approach_height
 
@@ -262,9 +248,6 @@ class Planner:
 
         self.robot.move_l(approach_pose)
 
-        # =====================================================
-        # OPEN GRIPPER
-        # =====================================================
         self.open_gripper(
             "before moving down to grip point"
         )
@@ -276,9 +259,6 @@ class Planner:
             )
         )
 
-        # =====================================================
-        # MOVE TO PICK
-        # =====================================================
         print(f"Moving opened TCP to grip point")
         print(f"Pick base position: {pick_base}")
 
@@ -290,14 +270,9 @@ class Planner:
             f"Saved pick TCP pose in base:\n{saved_pick_pose}"
         )
 
-        # =====================================================
-        # CLOSE GRIPPER
-        # =====================================================
         self.close_gripper("at grip point")
 
-        # =====================================================
-        # LIFT OBJECT VERTICALLY
-        # =====================================================
+        # Lift straight up before any joint-space transfer move.
         lift_pose = list(saved_pick_pose)
         lift_pose[2] += self.approach_height
 
@@ -308,9 +283,7 @@ class Planner:
 
         self.robot.move_l(lift_pose)
 
-        # =====================================================
-        # SAFE TRANSFER MOVE
-        # =====================================================
+        # Use taught joints for the transfer pose instead of an ad hoc path.
         self.move_transfer()
 
         transfer_pose = self.robot.get_tcp_pose()
@@ -323,31 +296,20 @@ class Planner:
 
         time.sleep(self.transfer_wait_s)
 
-        # =====================================================
-        # RETURN ABOVE PICK POSITION
-        # =====================================================
+        # Return above the original pick point before descending.
         above_saved_pose = list(saved_pick_pose)
         above_saved_pose[2] += self.approach_height
 
         print("\nReturning above original pick position")
         self.robot.move_l(above_saved_pose)
 
-        # =====================================================
-        # MOVE DOWN
-        # =====================================================
         print("Moving down to saved pick pose")
         self.robot.move_l(saved_pick_pose)
 
-        # =====================================================
-        # RELEASE
-        # =====================================================
         self.open_gripper(
             "release at saved pick pose"
         )
 
-        # =====================================================
-        # RETREAT UP
-        # =====================================================
         print("Retreating upward")
 
         retreat_pose = list(saved_pick_pose)
@@ -355,10 +317,8 @@ class Planner:
 
         self.robot.move_l(retreat_pose)
 
-    # =========================================================
-    # TRANSFORM COMPUTATION
-    # =========================================================
     def calculate_pick_point_base(self, marker_id):
+        """Calculate the marker grip point in robot base coordinates."""
         marker = self.cam.wait_for_marker(
             marker_id,
             timeout=10.0,
@@ -421,6 +381,7 @@ class Planner:
         return pick_base, T_marker2base
 
     def camera_center_pose_above_marker(self, T_marker2base):
+        """Return a TCP pose that places the camera above the marker center."""
         marker_base = T_marker2base[:3, 3]
 
         camera_base = marker_base.copy()

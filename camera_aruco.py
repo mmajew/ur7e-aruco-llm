@@ -1,3 +1,5 @@
+"""Detect ArUco markers from the calibrated camera and expose latest poses."""
+
 import threading
 import time
 
@@ -8,6 +10,8 @@ from transforms import Transformations
 
 
 class ArucoCamera:
+    """Continuously captures camera frames and estimates marker-to-camera poses."""
+
     def __init__(
         self,
         cam_id=2,
@@ -15,6 +19,7 @@ class ArucoCamera:
         max_distance=1.5,
         show_window=False,
     ):
+        # Match the capture settings used during camera calibration.
         self.cap = cv2.VideoCapture(cam_id, cv2.CAP_MSMF)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
@@ -29,6 +34,7 @@ class ArucoCamera:
         self.show_window = show_window
         self.window_name = "ArUco camera"
 
+        # Load intrinsic calibration produced by the ChArUco calibration script.
         self.mtx = np.load("camera_matrix.npy")
         self.dist = np.load("dist_coeffs.npy")
 
@@ -71,6 +77,7 @@ class ArucoCamera:
         self._thread = None
 
     def start_preview(self):
+        """Start the background capture and marker detection loop."""
         if self._running:
             return
 
@@ -79,6 +86,7 @@ class ArucoCamera:
         self._thread.start()
 
     def stop_preview(self):
+        """Stop background capture and close the optional OpenCV preview window."""
         self._running = False
         if self._thread is not None:
             self._thread.join(timeout=2.0)
@@ -91,10 +99,12 @@ class ArucoCamera:
                 pass
 
     def release(self):
+        """Stop the preview thread and release the camera handle."""
         self.stop_preview()
         self.cap.release()
 
     def get_latest_markers(self):
+        """Return copies of all currently visible marker pose records."""
         with self._lock:
             return {
                 marker_id: self._copy_marker(marker)
@@ -112,6 +122,7 @@ class ArucoCamera:
         return sorted(self.get_latest_markers().keys())
 
     def wait_for_marker(self, marker_id, timeout=None):
+        """Wait until a marker appears, or return None after timeout."""
         start = time.time()
         while True:
             marker = self.get_latest_marker(marker_id)
@@ -124,6 +135,7 @@ class ArucoCamera:
             time.sleep(0.05)
 
     def get_object_poses_cam(self):
+        """Return marker pose vectors in camera coordinates for all detections."""
         markers = self.get_latest_markers()
         if not markers:
             return None
@@ -133,10 +145,12 @@ class ArucoCamera:
         ]
 
     def get_latest_frame_jpeg(self):
+        """Return the latest annotated frame as JPEG bytes for streaming."""
         with self._lock:
             return self._latest_frame_jpeg
 
     def _preview_loop(self):
+        """Capture frames, update marker state, and draw the debug overlay."""
         while self._running:
             ret, frame = self.cap.read()
             if not ret:
@@ -170,6 +184,7 @@ class ArucoCamera:
             self._latest_frame_jpeg = encoded.tobytes()
 
     def _detect_markers(self, frame):
+        """Detect markers and convert valid detections into transform records."""
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         corners, ids, _ = self._detect_marker_corners(gray)
 
@@ -228,6 +243,7 @@ class ArucoCamera:
         return [self._estimate_marker_pose(corner) for corner in corners]
 
     def _estimate_marker_pose(self, corner):
+        """Estimate one marker pose with solvePnP when OpenCV lacks the helper."""
         image_points = corner.reshape(-1, 2).astype(np.float32)
         flags = (
             cv2.SOLVEPNP_IPPE_SQUARE

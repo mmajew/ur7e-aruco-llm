@@ -10,7 +10,6 @@ __pycache__/
 
 # Runtime/generated audio
 command.wav
-audio_responses/
 
 # Python tooling caches
 .pytest_cache/
