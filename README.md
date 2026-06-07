@@ -3,6 +3,8 @@
 Voice-guided UR7e pick-and-place demo using ArUco markers, OpenCV, RTDE,
 Robotiq Hand-E, Whisper, and an optional Ollama/LangChain selector.
 
+The video demonstration: demo_ur7e-aruco-llm.mp4
+
 ## Setup
 
 Use Python 3.11 on Windows:
